@@ -97,6 +97,8 @@ public interface IKernelComm extends NotificationsService.NotificationObserver {
 
     void editMessage(@NotNull TLAbsInputPeer peer, @NotNull String message, @NotNull Integer messageId) throws RpcException;
 
+    void deleteMessages(@NotNull Chat channel, @NotNull Integer... messageIds) throws RpcException;
+
     void sendMedia(@NotNull IUser user, @NotNull TLAbsInputMedia media) throws RpcException;
 
     void sendGroupMedia(@NotNull Chat group, @NotNull TLAbsInputMedia media) throws RpcException;
