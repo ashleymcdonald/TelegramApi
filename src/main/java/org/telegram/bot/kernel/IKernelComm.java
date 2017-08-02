@@ -7,6 +7,7 @@ import org.telegram.api.engine.TelegramApi;
 import org.telegram.api.engine.file.Downloader;
 import org.telegram.api.engine.file.Uploader;
 import org.telegram.api.input.media.TLAbsInputMedia;
+import org.telegram.api.input.peer.TLAbsInputPeer;
 import org.telegram.api.message.entity.TLAbsMessageEntity;
 import org.telegram.api.updates.TLAbsUpdates;
 import org.telegram.bot.TelegramFunctionCallback;
@@ -91,6 +92,10 @@ public interface IKernelComm extends NotificationsService.NotificationObserver {
     void sendChannelMessageWithEntities(@NotNull Chat channel, @NotNull String message, @NotNull TLVector<TLAbsMessageEntity> entities, boolean asAdmin) throws RpcException;
 
     void sendChannelMessageWithoutPreview(@NotNull Chat channel, @NotNull String message, boolean asAdmin) throws RpcException;
+
+    void editMessage(@NotNull IUser user, @NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException;
+
+    void editMessage(@NotNull TLAbsInputPeer peer, @NotNull String message, @NotNull Integer messageId) throws RpcException;
 
     void sendMedia(@NotNull IUser user, @NotNull TLAbsInputMedia media) throws RpcException;
 

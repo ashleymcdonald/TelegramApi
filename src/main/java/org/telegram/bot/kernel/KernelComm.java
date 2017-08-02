@@ -12,6 +12,7 @@ import org.telegram.api.engine.file.Downloader;
 import org.telegram.api.engine.file.Uploader;
 import org.telegram.api.engine.storage.AbsApiState;
 import org.telegram.api.functions.channels.TLRequestChannelsReadHistory;
+import org.telegram.api.functions.messages.TLRequestMessagesEditMessage;
 import org.telegram.api.functions.messages.TLRequestMessagesReadHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesSendMedia;
 import org.telegram.api.functions.messages.TLRequestMessagesSendMessage;
@@ -610,6 +611,31 @@ public class KernelComm implements IKernelComm {
     @Override
     public void sendChannelMessageWithoutPreview(@NotNull Chat channel, @NotNull String message, boolean asAdmin) throws RpcException {
         sendMessageChannelInternal(channel, message, null, null, false, false, asAdmin);
+    }
+
+    @Override
+    public void editMessage(@NotNull IUser user, @NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException {
+        editMessage(TLFactory.createTLInputPeer(null, channel), message, messageId);
+    }
+
+    public void editMessage(@NotNull TLAbsInputPeer peer, @NotNull String message, @NotNull Integer messageId) throws RpcException {
+        TLRequestMessagesEditMessage request = new TLRequestMessagesEditMessage();
+
+        request.setFlags(2048);
+        request.setPeer(peer);
+        request.setMessage(message);
+        request.setId(messageId);
+
+        try {
+            TLAbsUpdates updates = doRpcCallSync(request);
+            if (updates != null) {
+                handleUpdates(updates);
+            }
+        } catch (ExecutionException e) {
+            BotLogger.error(LOGTAG, e);
+        } finally {
+            BotLogger.info(LOGTAG, "Editing message " + messageId + " was successful");
+        }
     }
 
     @Override

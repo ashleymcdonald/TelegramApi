@@ -86,6 +86,30 @@ public class TLRequestMessagesEditMessage extends TLMethod<TLAbsUpdates> {
         return entities;
     }
 
+    public void setFlags(int flags) {
+        this.flags = flags;
+    }
+
+    public void setPeer(TLAbsInputPeer peer) {
+        this.peer = peer;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public void setReplyMarkup(TLAbsReplyMarkup replyMarkup) {
+        this.replyMarkup = replyMarkup;
+    }
+
+    public void setEntities(TLVector<TLAbsMessageEntity> entities) {
+        this.entities = entities;
+    }
+
     @Override
     public void serializeBody(OutputStream stream)
             throws IOException {
