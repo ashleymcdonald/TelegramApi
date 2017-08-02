@@ -614,7 +614,7 @@ public class KernelComm implements IKernelComm {
     }
 
     @Override
-    public void editMessage(@NotNull IUser user, @NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException {
+    public void editMessage(@NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException {
         editMessage(TLFactory.createTLInputPeer(null, channel), message, messageId);
     }
 

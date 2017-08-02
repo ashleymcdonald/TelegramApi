@@ -93,7 +93,7 @@ public interface IKernelComm extends NotificationsService.NotificationObserver {
 
     void sendChannelMessageWithoutPreview(@NotNull Chat channel, @NotNull String message, boolean asAdmin) throws RpcException;
 
-    void editMessage(@NotNull IUser user, @NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException;
+    void editMessage(@NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException;
 
     void editMessage(@NotNull TLAbsInputPeer peer, @NotNull String message, @NotNull Integer messageId) throws RpcException;
 
