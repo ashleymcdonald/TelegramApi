@@ -17,6 +17,7 @@ import org.telegram.api.engine.storage.AbsApiState;
 import org.telegram.api.functions.channels.TLRequestChannelsDeleteMessages;
 import org.telegram.api.functions.channels.TLRequestChannelsReadHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesEditMessage;
+import org.telegram.api.functions.messages.TLRequestMessagesGetHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesReadHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesSendMedia;
 import org.telegram.api.functions.messages.TLRequestMessagesSendMessage;
@@ -32,6 +33,7 @@ import org.telegram.api.message.entity.TLAbsMessageEntity;
 import org.telegram.api.message.entity.TLMessageEntityBold;
 import org.telegram.api.message.entity.TLMessageEntityCode;
 import org.telegram.api.message.entity.TLMessageEntityItalic;
+import org.telegram.api.messages.TLAbsMessages;
 import org.telegram.api.messages.TLAffectedHistory;
 import org.telegram.api.messages.TLAffectedMessages;
 import org.telegram.api.paymentapi.payments.result.TLPaymentsPaymentResult;
@@ -55,7 +57,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.SecureRandom;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -195,6 +197,11 @@ public class KernelComm implements IKernelComm {
                 answer = result.get();
             } catch (InterruptedException e) {
                 BotLogger.error(LOGTAG, e);
+            } catch (ExecutionException e) {
+                Throwable th = e.getCause();
+                if (th instanceof RpcException) {
+                    throw (RpcException) th;
+                }
             } catch (Exception e) {
                 BotLogger.error(LOGTAG, "Bot threw an unexpected exception at KernelComm-doRpcCallSync", e);
             }
@@ -640,11 +647,11 @@ public class KernelComm implements IKernelComm {
     }
 
     @Override
-    public void deleteMessages(@NotNull Chat channel, @NotNull Integer... messageIds) throws RpcException {
+    public void deleteMessages(@NotNull Chat channel, @NotNull Collection<Integer> messageIds) throws RpcException {
         TLRequestChannelsDeleteMessages request = new TLRequestChannelsDeleteMessages();
 
         TLIntVector vector = new TLIntVector();
-        vector.addAll(Arrays.asList(messageIds));
+        vector.addAll(messageIds);
 
         TLInputChannel inputChannel = new TLInputChannel();
         inputChannel.setChannelId(channel.getId());
@@ -653,7 +660,31 @@ public class KernelComm implements IKernelComm {
         request.setId(vector);
         request.setChannel(inputChannel);
 
-        processRpcCall(request, "Deleting message " + Arrays.toString(messageIds) + " was successful");
+        processRpcCall(request, "Deleting message " + messageIds.toString() + " was successful");
+    }
+
+    @Override
+    public TLAbsMessages getMessageHistory(@NotNull Chat chat, @NotNull Integer limit, @NotNull Integer offsetId, @NotNull Integer maxId) throws RpcException {
+        TLRequestMessagesGetHistory request = new TLRequestMessagesGetHistory();
+
+        request.setPeer(TLFactory.createTLInputPeer(null, chat));
+        request.setLimit(limit);
+        request.setOffsetId(offsetId);
+        request.setMaxId(maxId);
+
+        return (TLAbsMessages) processRpcCall(request, "Get messages");
+    }
+
+    @Override
+    public void getMessageHistoryAsync(@NotNull Chat chat, @NotNull Integer limit, @NotNull Integer offsetId, @NotNull Integer maxId, TelegramFunctionCallback<TLAbsMessages> callback) throws RpcException {
+        TLRequestMessagesGetHistory request = new TLRequestMessagesGetHistory();
+
+        request.setPeer(TLFactory.createTLInputPeer(null, chat));
+        request.setLimit(limit);
+        request.setOffsetId(offsetId);
+        request.setMaxId(maxId);
+
+        doRpcCallAsync(request, callback);
     }
 
     @Override
@@ -938,22 +969,25 @@ public class KernelComm implements IKernelComm {
         super.finalize();
     }
 
-    private <T extends TLObject> void processRpcCall(TLMethod<T> request, String successMessage) throws RpcException {
+    private <T extends TLObject> TLObject processRpcCall(TLMethod<T> request, String successMessage) throws RpcException {
         try {
             TLObject ret = doRpcCallSync(request);
-            if (ret == null)
-                return;
-
-            if (ret instanceof TLAbsUpdates) {
-                handleUpdates((TLAbsUpdates) ret);
-            } else if (ret instanceof TLAffectedMessages) {
-                handleAffectedMessagesAndHistory(ret);
+            if (ret != null) {
+                if (ret instanceof TLAbsUpdates) {
+                    handleUpdates((TLAbsUpdates) ret);
+                } else if (ret instanceof TLAffectedMessages) {
+                    handleAffectedMessagesAndHistory(ret);
+                }
             }
+
+            return ret;
 
         } catch (ExecutionException e) {
             BotLogger.error(LOGTAG, e);
         } finally {
             BotLogger.info(LOGTAG, successMessage);
         }
+
+        return null;
     }
 }
