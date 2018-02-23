@@ -779,12 +779,14 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
         onUsers(users);
         onChats(chats);
         messages.stream().forEach(this::onTLAbsMessageCustom);
-        newUpdates.stream().map(x -> {
-            UpdateWrapper updateWrapper = new UpdateWrapper(x);
-            updateWrapper.disablePtsCheck();
-            updateWrapper.disableUpdatePts();
-            return updateWrapper;
-        }).forEach(this::processUpdate);
+        //TODO marat
+        //no need to update chats like this (stack over flow)
+//        newUpdates.stream().map(x -> {
+//            UpdateWrapper updateWrapper = new UpdateWrapper(x);
+//            updateWrapper.disablePtsCheck();
+//            updateWrapper.disableUpdatePts();
+//            return updateWrapper;
+//        }).forEach(this::processUpdate);
     }
 
     @Override
