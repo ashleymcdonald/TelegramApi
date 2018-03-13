@@ -2,10 +2,12 @@ package org.telegram.bot.kernel;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.telegram.api.contacts.TLResolvedPeer;
 import org.telegram.api.engine.RpcException;
 import org.telegram.api.engine.TelegramApi;
 import org.telegram.api.engine.file.Downloader;
 import org.telegram.api.engine.file.Uploader;
+import org.telegram.api.input.chat.TLInputChannel;
 import org.telegram.api.input.media.TLAbsInputMedia;
 import org.telegram.api.input.peer.TLAbsInputPeer;
 import org.telegram.api.message.entity.TLAbsMessageEntity;
@@ -31,6 +33,8 @@ import java.util.concurrent.ExecutionException;
 public interface IKernelComm extends NotificationsService.NotificationObserver {
     boolean init();
 
+    TLResolvedPeer performSearchUsername(String username) throws RpcException;
+
     void setMainHandler(@NotNull MainHandler mainHandler);
 
     <T extends TLObject> T doRpcCallSync(TLMethod<T> method) throws ExecutionException, RpcException;
@@ -40,6 +44,8 @@ public interface IKernelComm extends NotificationsService.NotificationObserver {
     <T extends TLObject> void doRpcCallAsync(TLMethod<T> method, TelegramFunctionCallback<T> callback);
 
     void doRpcCallAsyncNoReturn(TLMethod<TLObject> method);
+
+    void forwardMessage(@NotNull Chat chat, @NotNull IUser user, int messageId) throws RpcException;
 
     void sendMessage(@NotNull IUser user, @NotNull String message) throws RpcException;
 
@@ -116,6 +122,8 @@ public interface IKernelComm extends NotificationsService.NotificationObserver {
     void performMarkAsRead(@NotNull IUser user, int messageId) throws RpcException;
 
     void performMarkGroupAsRead(@NotNull Chat group, int messageId) throws RpcException;
+
+    void performJoinChat(@NotNull TLInputChannel chat) throws RpcException;
 
     int getCurrentUserId();
 

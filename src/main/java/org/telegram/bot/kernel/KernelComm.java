@@ -3,6 +3,7 @@ package org.telegram.bot.kernel;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.telegram.api.contacts.TLResolvedPeer;
 import org.telegram.api.document.attribute.TLAbsDocumentAttribute;
 import org.telegram.api.document.attribute.TLDocumentAttributeFilename;
 import org.telegram.api.document.attribute.TLDocumentAttributeSticker;
@@ -15,7 +16,10 @@ import org.telegram.api.engine.file.Downloader;
 import org.telegram.api.engine.file.Uploader;
 import org.telegram.api.engine.storage.AbsApiState;
 import org.telegram.api.functions.channels.TLRequestChannelsDeleteMessages;
+import org.telegram.api.functions.channels.TLRequestChannelsJoinChannel;
 import org.telegram.api.functions.channels.TLRequestChannelsReadHistory;
+import org.telegram.api.functions.contacts.TLRequestContactsResolveUsername;
+import org.telegram.api.functions.messages.TLRequestMessagesForwardMessages;
 import org.telegram.api.functions.messages.TLRequestMessagesEditMessage;
 import org.telegram.api.functions.messages.TLRequestMessagesGetHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesReadHistory;
@@ -47,10 +51,7 @@ import org.telegram.bot.services.BotLogger;
 import org.telegram.bot.services.NotificationsService;
 import org.telegram.bot.structure.Chat;
 import org.telegram.bot.structure.IUser;
-import org.telegram.tl.TLIntVector;
-import org.telegram.tl.TLMethod;
-import org.telegram.tl.TLObject;
-import org.telegram.tl.TLVector;
+import org.telegram.tl.*;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -288,6 +289,19 @@ public class KernelComm implements IKernelComm {
         });
     }
 
+    public void forwardMessage(@NotNull Chat chat, @NotNull IUser user, int messageId) throws RpcException {
+
+        final TLRequestMessagesForwardMessages request = new TLRequestMessagesForwardMessages();
+        request.setFromPeer(TLFactory.createTLInputPeer(null, chat));
+        request.setToPeer(TLFactory.createTLInputPeer(user, null));
+        TLIntVector integers = new TLIntVector();
+        integers.add(messageId);
+        request.setId(integers);
+        BotLogger.info(LOGTAG, "forward message to: " + user.getUserId());
+        performSendMessageSyncInternal(request);
+
+        }
+
     private void sendMessageInternal(@NotNull IUser user, @Nullable String message, @Nullable Integer replayToMsg,
                                      @Nullable TLVector<TLAbsMessageEntity> entities,
                                      boolean enableWebPreview, boolean parseMarkdown) throws RpcException {
@@ -445,6 +459,27 @@ public class KernelComm implements IKernelComm {
             performSendMessageSyncInternal(request);
         }
     }
+
+    private void performSendMessageSyncInternal(TLRequestMessagesForwardMessages request) throws RpcException {
+        final int id = this.random.nextInt();
+        TLLongVector randomIds = new TLLongVector();
+        for (Integer index : request.getId()) {
+            randomIds.add(this.random.nextLong());
+        }
+        request.setRandomId(randomIds);
+
+        try {
+            final TLAbsUpdates updates = doRpcCallSync(request);
+            if (updates != null) {
+                handleUpdates(updates);
+            }
+        } catch (ExecutionException e) {
+            BotLogger.error(LOGTAG, e);
+        } finally {
+            BotLogger.info(LOGTAG, "Sending message " + id + " was successful");
+        }
+    }
+
 
     private void performSendMessageSyncInternal(TLRequestMessagesSendMessage request) throws RpcException {
         final int id = this.random.nextInt();
@@ -792,6 +827,21 @@ public class KernelComm implements IKernelComm {
     }
 
     @Override
+    public TLResolvedPeer performSearchUsername(String username) throws RpcException {
+        try {
+            TLRequestContactsResolveUsername resolveUsername = new TLRequestContactsResolveUsername();
+            resolveUsername.setUsername(username);
+            TLObject object = doRpcCallSync(resolveUsername);
+            if (object instanceof TLResolvedPeer) {
+                return (TLResolvedPeer)object;
+            }
+        } catch (ExecutionException e) {
+            BotLogger.severe(LOGTAG, e);
+        }
+        return null;
+    }
+
+    @Override
     public void performMarkAsRead(@NotNull IUser user, int messageId) throws RpcException {
         performMarkAsReadInternal(TLFactory.createTLInputPeer(user, null), messageId);
     }
@@ -799,6 +849,18 @@ public class KernelComm implements IKernelComm {
     @Override
     public void performMarkGroupAsRead(@NotNull Chat group, int messageId) throws RpcException {
         performMarkAsReadInternal(TLFactory.createTLInputPeer(null, group), messageId);
+    }
+
+    @Override
+    public void performJoinChat(TLInputChannel chat) throws RpcException {
+        try {
+            TLRequestChannelsJoinChannel joinRequest = new TLRequestChannelsJoinChannel();
+            joinRequest.setChannel(chat);
+            TLObject object = doRpcCallSync(joinRequest);
+            BotLogger.info(LOGTAG,"performJoinChat "+object);
+        } catch (ExecutionException e) {
+            BotLogger.severe(LOGTAG, e);
+        }
     }
 
     private void performMarkAsReadInternal(TLAbsInputPeer inputPeer, int messageId) throws RpcException {

@@ -1,4 +1,4 @@
-package org.telegram.bot.handlers;
+
 
 import org.jetbrains.annotations.NotNull;
 import org.telegram.api.chat.TLAbsChat;
@@ -807,6 +807,13 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
     public final void onTLChannelDifferences(List<TLAbsUser> users, List<TLAbsMessage> messages, List<TLAbsUpdate> newUpdates, List<TLAbsChat> chats) {
         onUsers(users);
         onChats(chats);
+        // messages.stream().forEach(this::onTLAbsMessageCustom);
+        // newUpdates.stream().map(x -> {
+        //     UpdateWrapper updateWrapper = new UpdateWrapper(x);
+        //     updateWrapper.disablePtsCheck();
+        //     updateWrapper.disableUpdatePts();
+        //     return updateWrapper;
+        // }).forEach(this::processUpdate);
         for (TLAbsMessage message : messages) {
             onTLAbsMessageCustom(message);
         }
