@@ -7,7 +7,9 @@ import org.telegram.api.engine.TelegramApi;
 import org.telegram.api.engine.file.Downloader;
 import org.telegram.api.engine.file.Uploader;
 import org.telegram.api.input.media.TLAbsInputMedia;
+import org.telegram.api.input.peer.TLAbsInputPeer;
 import org.telegram.api.message.entity.TLAbsMessageEntity;
+import org.telegram.api.messages.TLAbsMessages;
 import org.telegram.api.updates.TLAbsUpdates;
 import org.telegram.bot.TelegramFunctionCallback;
 import org.telegram.bot.services.NotificationsService;
@@ -17,6 +19,7 @@ import org.telegram.tl.TLMethod;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
 
+import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -91,6 +94,16 @@ public interface IKernelComm extends NotificationsService.NotificationObserver {
     void sendChannelMessageWithEntities(@NotNull Chat channel, @NotNull String message, @NotNull TLVector<TLAbsMessageEntity> entities, boolean asAdmin) throws RpcException;
 
     void sendChannelMessageWithoutPreview(@NotNull Chat channel, @NotNull String message, boolean asAdmin) throws RpcException;
+
+    void editMessage(@NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException;
+
+    void editMessage(@NotNull TLAbsInputPeer peer, @NotNull String message, @NotNull Integer messageId) throws RpcException;
+
+    void deleteMessages(@NotNull Chat channel, @NotNull Collection<Integer> messageIds) throws RpcException;
+
+    TLAbsMessages getMessageHistory(@NotNull Chat chat, @NotNull Integer limit, @NotNull Integer offset, @NotNull Integer maxId) throws RpcException;
+
+    void getMessageHistoryAsync(@NotNull Chat chat, @NotNull Integer limit, @NotNull Integer offset, @NotNull Integer maxId, TelegramFunctionCallback<TLAbsMessages> callback) throws RpcException;
 
     void sendMedia(@NotNull IUser user, @NotNull TLAbsInputMedia media) throws RpcException;
 

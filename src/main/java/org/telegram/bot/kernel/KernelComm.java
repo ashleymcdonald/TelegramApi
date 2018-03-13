@@ -6,12 +6,18 @@ import org.jetbrains.annotations.Nullable;
 import org.telegram.api.document.attribute.TLAbsDocumentAttribute;
 import org.telegram.api.document.attribute.TLDocumentAttributeFilename;
 import org.telegram.api.document.attribute.TLDocumentAttributeSticker;
-import org.telegram.api.engine.*;
+import org.telegram.api.engine.ApiCallback;
+import org.telegram.api.engine.AppInfo;
+import org.telegram.api.engine.RpcException;
+import org.telegram.api.engine.TelegramApi;
 import org.telegram.api.engine.TimeoutException;
 import org.telegram.api.engine.file.Downloader;
 import org.telegram.api.engine.file.Uploader;
 import org.telegram.api.engine.storage.AbsApiState;
+import org.telegram.api.functions.channels.TLRequestChannelsDeleteMessages;
 import org.telegram.api.functions.channels.TLRequestChannelsReadHistory;
+import org.telegram.api.functions.messages.TLRequestMessagesEditMessage;
+import org.telegram.api.functions.messages.TLRequestMessagesGetHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesReadHistory;
 import org.telegram.api.functions.messages.TLRequestMessagesSendMedia;
 import org.telegram.api.functions.messages.TLRequestMessagesSendMessage;
@@ -27,6 +33,7 @@ import org.telegram.api.message.entity.TLAbsMessageEntity;
 import org.telegram.api.message.entity.TLMessageEntityBold;
 import org.telegram.api.message.entity.TLMessageEntityCode;
 import org.telegram.api.message.entity.TLMessageEntityItalic;
+import org.telegram.api.messages.TLAbsMessages;
 import org.telegram.api.messages.TLAffectedHistory;
 import org.telegram.api.messages.TLAffectedMessages;
 import org.telegram.api.paymentapi.payments.result.TLPaymentsPaymentResult;
@@ -40,6 +47,7 @@ import org.telegram.bot.services.BotLogger;
 import org.telegram.bot.services.NotificationsService;
 import org.telegram.bot.structure.Chat;
 import org.telegram.bot.structure.IUser;
+import org.telegram.tl.TLIntVector;
 import org.telegram.tl.TLMethod;
 import org.telegram.tl.TLObject;
 import org.telegram.tl.TLVector;
@@ -49,7 +57,12 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.SecureRandom;
-import java.util.concurrent.*;
+import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -68,7 +81,7 @@ public class KernelComm implements IKernelComm {
     private static final int BYTES = 1024;
 
     private static final Pattern boldMarkdownRegex = Pattern.compile("\\*.+?\\*");
-    private static final Pattern italicMarkdownRegex =  Pattern.compile("\\_.+?\\_");
+    private static final Pattern italicMarkdownRegex = Pattern.compile("\\_.+?\\_");
     private static final Pattern codeMarkdownRegex = Pattern.compile("\\`.+?\\`");
 
     private final ExecutorService exe = Executors.newCachedThreadPool();
@@ -184,6 +197,11 @@ public class KernelComm implements IKernelComm {
                 answer = result.get();
             } catch (InterruptedException e) {
                 BotLogger.error(LOGTAG, e);
+            } catch (ExecutionException e) {
+                Throwable th = e.getCause();
+                if (th instanceof RpcException) {
+                    throw (RpcException) th;
+                }
             } catch (Exception e) {
                 BotLogger.error(LOGTAG, "Bot threw an unexpected exception at KernelComm-doRpcCallSync", e);
             }
@@ -446,12 +464,12 @@ public class KernelComm implements IKernelComm {
 
     @Override
     public void sendMessage(@NotNull IUser user, @NotNull String message) throws RpcException {
-        sendMessageInternal(user, message, null,null, false, false);
+        sendMessageInternal(user, message, null, null, false, false);
     }
 
     @Override
     public void sendMessage(@NotNull IUser user, @NotNull String message, @NotNull Boolean hasWebPreview) throws RpcException {
-        sendMessageInternal(user, message, null, null,hasWebPreview, false);
+        sendMessageInternal(user, message, null, null, hasWebPreview, false);
     }
 
     @Override
@@ -461,11 +479,11 @@ public class KernelComm implements IKernelComm {
 
     /**
      * Send a message without web preview
-     * @param user Destination user
-     * @param message Message to send
-     * @param hasWebPreview If the message must have web preview
-     * @param callback Callback to execute after sent. If no provided, a default one will be executed.
      *
+     * @param user          Destination user
+     * @param message       Message to send
+     * @param hasWebPreview If the message must have web preview
+     * @param callback      Callback to execute after sent. If no provided, a default one will be executed.
      * @note Default callback just send received updates to KernelHandler and add the id to the sent by implementation messages list.
      */
     @Override
@@ -473,15 +491,15 @@ public class KernelComm implements IKernelComm {
         if (callback == null) {
             callback = getDefaultSendMessageCallback(user);
         }
-        sendMessageInternalAsync(user, message, null, null,hasWebPreview, false, callback);
+        sendMessageInternalAsync(user, message, null, null, hasWebPreview, false, callback);
     }
 
     /**
      * Send a message
-     * @param user Destination user
-     * @param message Message to send
-     * @param callback Callback to execute after sent. If no provided, a default one will be executed.
      *
+     * @param user     Destination user
+     * @param message  Message to send
+     * @param callback Callback to execute after sent. If no provided, a default one will be executed.
      * @note Default callback just send received updates to KernelHandler and add the id to the sent by implementation messages list.
      */
     @Override
@@ -507,11 +525,11 @@ public class KernelComm implements IKernelComm {
 
     /**
      * Send a message as reply
-     * @param user Destination user
-     * @param message Message to send
-     * @param replayToMsg Id of the message to answer
-     * @param callback Callback to execute after sent. If no provided, a default one will be executed.
      *
+     * @param user        Destination user
+     * @param message     Message to send
+     * @param replayToMsg Id of the message to answer
+     * @param callback    Callback to execute after sent. If no provided, a default one will be executed.
      * @note Default callback just send received updates to KernelHandler and add the id to the sent by implementation messages list.
      */
     @Override
@@ -520,30 +538,30 @@ public class KernelComm implements IKernelComm {
             callback = getDefaultSendMessageCallback(user);
         }
 
-        sendMessageInternalAsync(user, message, replayToMsg, null,true, false, callback);
+        sendMessageInternalAsync(user, message, replayToMsg, null, true, false, callback);
     }
 
     @Override
     public void sendMessageWithMarkdown(@NotNull IUser user, @NotNull String message) throws RpcException {
-        sendMessageInternal(user, message, null, null,true, true);
+        sendMessageInternal(user, message, null, null, true, true);
     }
 
     @Override
     public void sendMessageWithEntities(@NotNull IUser user, @NotNull String message, @NotNull TLVector<TLAbsMessageEntity> entities) throws RpcException {
-        sendMessageInternal(user, message, null, entities,true, true);
+        sendMessageInternal(user, message, null, entities, true, true);
     }
 
     @Override
     public void sendMessageWithoutPreview(@NotNull IUser user, @NotNull String message) throws RpcException {
-        sendMessageInternal(user, message, null, null,false, false);
+        sendMessageInternal(user, message, null, null, false, false);
     }
 
     /**
      * Send a message without web preview
-     * @param user Destination user
-     * @param message Message to send
-     * @param callback Callback to execute after sent. If no provided, a default one will be executed.
      *
+     * @param user     Destination user
+     * @param message  Message to send
+     * @param callback Callback to execute after sent. If no provided, a default one will be executed.
      * @note Default callback just send received updates to KernelHandler and add the id to the sent by bot messages list.
      */
     @Override
@@ -589,12 +607,12 @@ public class KernelComm implements IKernelComm {
 
     @Override
     public void sendChannelMessage(@NotNull Chat channel, @NotNull String message, boolean asAdmin) throws RpcException {
-        sendMessageChannelInternal(channel, message, null,null, true, false, asAdmin);
+        sendMessageChannelInternal(channel, message, null, null, true, false, asAdmin);
     }
 
     @Override
     public void sendChannelMessage(@NotNull Chat channel, @Nullable String message, @Nullable Integer replayToMsg, @Nullable TLVector<TLAbsMessageEntity> entities, boolean enableWebPreview, boolean parseMarkdown, boolean asAdmin) throws RpcException {
-        sendMessageChannelInternal(channel, message, replayToMsg,entities, enableWebPreview, parseMarkdown, asAdmin);
+        sendMessageChannelInternal(channel, message, replayToMsg, entities, enableWebPreview, parseMarkdown, asAdmin);
     }
 
     @Override
@@ -613,7 +631,64 @@ public class KernelComm implements IKernelComm {
     }
 
     @Override
-    public void sendMedia(@NotNull IUser user, @NotNull TLAbsInputMedia media) throws RpcException{
+    public void editMessage(@NotNull Chat channel, @NotNull String message, @NotNull Integer messageId) throws RpcException {
+        editMessage(TLFactory.createTLInputPeer(null, channel), message, messageId);
+    }
+
+    public void editMessage(@NotNull TLAbsInputPeer peer, @NotNull String message, @NotNull Integer messageId) throws RpcException {
+        TLRequestMessagesEditMessage request = new TLRequestMessagesEditMessage();
+
+        request.setFlags(2048);
+        request.setPeer(peer);
+        request.setMessage(message);
+        request.setId(messageId);
+
+        processRpcCall(request, "Editing message " + messageId + " was successful");
+    }
+
+    @Override
+    public void deleteMessages(@NotNull Chat channel, @NotNull Collection<Integer> messageIds) throws RpcException {
+        TLRequestChannelsDeleteMessages request = new TLRequestChannelsDeleteMessages();
+
+        TLIntVector vector = new TLIntVector();
+        vector.addAll(messageIds);
+
+        TLInputChannel inputChannel = new TLInputChannel();
+        inputChannel.setChannelId(channel.getId());
+        inputChannel.setAccessHash(channel.getAccessHash());
+
+        request.setId(vector);
+        request.setChannel(inputChannel);
+
+        processRpcCall(request, "Deleting message " + messageIds.toString() + " was successful");
+    }
+
+    @Override
+    public TLAbsMessages getMessageHistory(@NotNull Chat chat, @NotNull Integer limit, @NotNull Integer offsetId, @NotNull Integer maxId) throws RpcException {
+        TLRequestMessagesGetHistory request = new TLRequestMessagesGetHistory();
+
+        request.setPeer(TLFactory.createTLInputPeer(null, chat));
+        request.setLimit(limit);
+        request.setOffsetId(offsetId);
+        request.setMaxId(maxId);
+
+        return (TLAbsMessages) processRpcCall(request, "Get messages");
+    }
+
+    @Override
+    public void getMessageHistoryAsync(@NotNull Chat chat, @NotNull Integer limit, @NotNull Integer offsetId, @NotNull Integer maxId, TelegramFunctionCallback<TLAbsMessages> callback) throws RpcException {
+        TLRequestMessagesGetHistory request = new TLRequestMessagesGetHistory();
+
+        request.setPeer(TLFactory.createTLInputPeer(null, chat));
+        request.setLimit(limit);
+        request.setOffsetId(offsetId);
+        request.setMaxId(maxId);
+
+        doRpcCallAsync(request, callback);
+    }
+
+    @Override
+    public void sendMedia(@NotNull IUser user, @NotNull TLAbsInputMedia media) throws RpcException {
         final int id = this.random.nextInt();
         try {
             BotLogger.debug(LOGTAG, "Sending media " + id + " to: " + user + " : " + media);
@@ -627,7 +702,7 @@ public class KernelComm implements IKernelComm {
                 handleUpdates(updates);
             }
         } catch (ExecutionException e) {
-            BotLogger.warn(LOGTAG,"Sending media " + id + " failed");
+            BotLogger.warn(LOGTAG, "Sending media " + id + " failed");
         }
     }
 
@@ -773,7 +848,7 @@ public class KernelComm implements IKernelComm {
             final int lastIndex = matcher.end();
             finalMessage.append(message.substring(lastAddedIndex, startIndex));
             final int initMarkdown = finalMessage.length();
-            finalMessage.append(message.substring(startIndex + 1, lastIndex-1));
+            finalMessage.append(message.substring(startIndex + 1, lastIndex - 1));
             lastAddedIndex = lastIndex;
             final TLMessageEntityBold boldEntity = new TLMessageEntityBold();
             boldEntity.setOffset(initMarkdown);
@@ -799,7 +874,7 @@ public class KernelComm implements IKernelComm {
             final int lastIndex = matcher.end();
             finalMessage.append(message.substring(lastAddedIndex, startIndex));
             final int initMarkdown = finalMessage.length();
-            finalMessage.append(message.substring(startIndex + 1, lastIndex-1));
+            finalMessage.append(message.substring(startIndex + 1, lastIndex - 1));
             lastAddedIndex = lastIndex;
             final TLMessageEntityItalic italicEntity = new TLMessageEntityItalic();
             italicEntity.setOffset(initMarkdown);
@@ -825,7 +900,7 @@ public class KernelComm implements IKernelComm {
             final int lastIndex = matcher.end();
             finalMessage.append(message.substring(lastAddedIndex, startIndex));
             final int initMarkdown = finalMessage.length();
-            finalMessage.append(message.substring(startIndex + 1, lastIndex-1));
+            finalMessage.append(message.substring(startIndex + 1, lastIndex - 1));
             lastAddedIndex = lastIndex;
             final TLMessageEntityCode codeEntity = new TLMessageEntityCode();
             codeEntity.setOffset(initMarkdown);
@@ -892,5 +967,27 @@ public class KernelComm implements IKernelComm {
     protected void finalize() throws Throwable {
         NotificationsService.getInstance().removeObserver(this, NotificationsService.updatesInvalidated);
         super.finalize();
+    }
+
+    private <T extends TLObject> TLObject processRpcCall(TLMethod<T> request, String successMessage) throws RpcException {
+        try {
+            TLObject ret = doRpcCallSync(request);
+            if (ret != null) {
+                if (ret instanceof TLAbsUpdates) {
+                    handleUpdates((TLAbsUpdates) ret);
+                } else if (ret instanceof TLAffectedMessages) {
+                    handleAffectedMessagesAndHistory(ret);
+                }
+            }
+
+            return ret;
+
+        } catch (ExecutionException e) {
+            BotLogger.error(LOGTAG, e);
+        } finally {
+            BotLogger.info(LOGTAG, successMessage);
+        }
+
+        return null;
     }
 }
