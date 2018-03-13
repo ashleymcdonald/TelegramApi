@@ -209,9 +209,12 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
         if ((updateWrapper.getPts() == 0) || (newPts == updateWrapper.getPts())) {
             canHandle = true;
         } else {
-            BotLogger.warn(LOGTAG, "Discarded " + updateWrapper.toString() + " with newPts: "
-                    + newPts + "(" + pts +") and pts: " + updateWrapper.getPts());
-            canHandle = false;
+//            BotLogger.warn(LOGTAG, "Discarded " + updateWrapper.toString() + " with newPts: "
+//                    + newPts + "(" + pts +") and pts: " + updateWrapper.getPts());
+//            System.out.println(updateWrapper.getUpdate().g);
+//            canHandle = false;
+            // TODO: Workaround to read first messages from chat in session, when differences are not yet collected
+            canHandle = true;
             if (newPts < updateWrapper.getPts()) {
                 if (!updateWrapper.isChannel() || isChatMissing(updateWrapper.getChannelId())) {
                     getDifferences();
@@ -344,7 +347,7 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
     }
 
     private void onTLUpdateChannelNewMessage(TLUpdateChannelNewMessage update, boolean gettingDifferences) {
-        if (isUserFromMessageMissing(update.getMessage(), false)) {
+        if (isUserFromMessageMissing(update.getMessage(), true)) {
             if (isChatMissing(update.getChannelId())) {
                 if (!gettingDifferences) {
                     differencesHandler.getDifferences();
@@ -512,7 +515,15 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
     }
 
     private void onTLUpdateEditChannelMessage(TLUpdateEditChannelMessage update, boolean gettingDifferences) {
-        if (isUserFromMessageMissing(update.getMessage(), false)) {
+
+        // workaround for infinite loop
+        // https://github.com/rubenlagus/TelegramApi/issues/33
+        boolean editIsFromChannelOwner = false;
+        if (update.getMessage() instanceof TLMessage) {
+            final TLMessage tlMessage = (TLMessage) update.getMessage();
+            editIsFromChannelOwner = tlMessage.getFromId() == 0;
+        }
+        if (isUserFromMessageMissing(update.getMessage(), true)) {
             if (isChatMissing(update.getChannelId())) {
                 if (!gettingDifferences) {
                     differencesHandler.getDifferences();
@@ -764,27 +775,54 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
     public final void onTLAbsDifference(@NotNull TLAbsDifference absDifference) {
         onUsers(absDifference.getUsers());
         onChats(absDifference.getChats());
-        absDifference.getNewMessages().stream().forEach(this::onTLAbsMessageCustom);
-        absDifference.getOtherUpdates().stream().map(x -> {
-            UpdateWrapper updateWrapper = new UpdateWrapper(x);
+        for (TLAbsMessage message : absDifference.getNewMessages()) {
+            this.onTLAbsMessageCustom(message);
+
+        }
+//        absDifference.getNewMessages().parallelStream().forEach(this::onTLAbsMessageCustom);
+//        absDifference.getNewMessages().parallelStream().forEach(this::onTLAbsMessageCustom);
+
+//        if (absDifference.getOtherUpdates() != null && absDifference.getOtherUpdates().size() > 0) {
+//            System.out.println("Processing other updates. Size: "+absDifference.getOtherUpdates().size());
+//        }
+        for (TLAbsUpdate message : absDifference.getOtherUpdates()) {
+            UpdateWrapper updateWrapper = new UpdateWrapper(message);
             updateWrapper.disablePtsCheck();
             updateWrapper.disableUpdatePts();
             updateWrapper.enableGettingDifferences();
-            return updateWrapper;
-        }).forEach(this::processUpdate);
+            processUpdate(updateWrapper);
+
+        }
+//
+//        absDifference.getOtherUpdates().parallelStream().map(x -> {
+//            UpdateWrapper updateWrapper = new UpdateWrapper(x);
+//            updateWrapper.disablePtsCheck();
+//            updateWrapper.disableUpdatePts();
+//            updateWrapper.enableGettingDifferences();
+//            return updateWrapper;
+//        }).forEach(this::processUpdate);
     }
 
     @Override
     public final void onTLChannelDifferences(List<TLAbsUser> users, List<TLAbsMessage> messages, List<TLAbsUpdate> newUpdates, List<TLAbsChat> chats) {
         onUsers(users);
         onChats(chats);
-        messages.stream().forEach(this::onTLAbsMessageCustom);
-        newUpdates.stream().map(x -> {
-            UpdateWrapper updateWrapper = new UpdateWrapper(x);
+        for (TLAbsMessage message : messages) {
+            onTLAbsMessageCustom(message);
+        }
+//        messages.parallelStream().forEach(this::onTLAbsMessageCustom);
+        for (TLAbsUpdate update : newUpdates) {
+            UpdateWrapper updateWrapper = new UpdateWrapper(update);
             updateWrapper.disablePtsCheck();
             updateWrapper.disableUpdatePts();
-            return updateWrapper;
-        }).forEach(this::processUpdate);
+            processUpdate(updateWrapper);
+        }
+//        newUpdates.parallelStream().map(x -> {
+//            UpdateWrapper updateWrapper = new UpdateWrapper(x);
+//            updateWrapper.disablePtsCheck();
+//            updateWrapper.disableUpdatePts();
+//            return updateWrapper;
+//        }).forEach(this::processUpdate);
     }
 
     @Override
@@ -843,7 +881,7 @@ public abstract class UpdatesHandlerBase implements IUpdatesHandler {
     }
 
     private boolean isUserFromMessageMissing(TLAbsMessage message) {
-        return isUserFromMessageMissing(message, false);
+        return isUserFromMessageMissing(message, true);
     }
 
     private boolean isChatMissing(int chatId) {
